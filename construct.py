@@ -386,7 +386,7 @@ class ConstructWindow(QMainWindow):
     def initUI(self):
         self.setWindowTitle('Construct - Unnamed')
         self.setGeometry(100, 100, 800, 600)
-        self.setWindowIcon(QIcon('scratchpad.png'))
+        self.setWindowIcon(QIcon('construct.png'))
         self.editor = CodeEditor(self)
         self.setCentralWidget(self.editor)
         self.editor.textChanged.connect(self.on_text_changed)

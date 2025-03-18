@@ -1,0 +1,107 @@
+/*
+    Construct Professional
+*/
+
+/* Code Editor Area */
+QsciScintilla {
+    font-family: 'Cascadia Code', 'Courier New', Courier, monospace;
+    font-weight: 400;
+    font-size: 14px;
+    background-color: #f5f5f5;
+    color: #000000;
+    border: 1px solid #cccccc;
+    padding: 2px;
+}
+
+/* Standard Text Areas */
+QTextEdit, QDialog QTextEdit {
+    font-family: 'Cascadia Code', 'Courier New', Courier, monospace;
+    font-weight: 400;
+    font-size: 14px;
+    background-color: #f5f5f5;
+    color: #000000;
+    border: 1px solid #cccccc;
+    padding: 2px;
+}
+
+/* Main Window & Dialogs */
+QMainWindow, QDialog {
+    background-color: #ffffff;
+}
+
+/* Bottom Status Bar */
+QStatusBar {
+    background-color: #f1f1f1;
+    color: #202020;
+}
+
+/* Top Menu Bar */
+QMenuBar {
+    background-color: #0c0c0c;
+    color: #ffffff;
+}
+
+/* Menu Bar Options */
+QMenuBar::item {
+    background: transparent;
+    padding: 5px 10px;
+}
+
+/* Menu Bar Options on Hover/Selected */
+QMenuBar::item:selected {
+    background: #000000;
+}
+
+/* Buttons */
+QPushButton, QDialog QPushButton {
+    background: transparent;
+    border: 1px solid #cccccc;
+    color: #000000;
+    padding: 5px 10px;
+}
+
+/* Button Hover */
+QPushButton:hover, QDialog QPushButton:hover {
+    background-color: #f5f5f5;
+}
+
+/* Line Edits */
+QLineEdit, QDialog QLineEdit {
+    border: 1px solid #cccccc;
+    padding: 3px;
+    background-color: #ffffff;
+}
+
+/* Focused Line Edits */
+QLineEdit:focus, QDialog QLineEdit:focus {
+    border-color: #66aaff;
+}
+
+/* Scrollbars */
+QScrollBar:horizontal, QDialog QScrollBar:horizontal {
+    height: 10px;
+}
+
+QScrollBar:vertical, QDialog QScrollBar:vertical {
+    width: 10px;
+}
+
+QScrollBar::handle:horizontal,
+QScrollBar::handle:vertical,
+QDialog QScrollBar::handle:horizontal,
+QDialog QScrollBar::handle:vertical {
+    background: #cccccc;
+    border-radius: 5px;
+}
+
+/* File Explorer Sidebar */
+QDockWidget {
+    background-color: #ffffff;
+    border: 1px solid #cccccc;
+}
+
+QTreeView {
+    font-size: 12px;
+    background-color: #ffffff;
+    color: #000000;
+}

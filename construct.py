@@ -89,9 +89,11 @@ class WebFetcher(QThread):
 class FileHandler(QThread):
     file_content_loaded = pyqtSignal(str, str)
     file_saved = pyqtSignal(bool)
+
     def __init__(self, file_path):
         super().__init__()
         self.file_path = file_path
+
     def run(self):
         detector = UniversalDetector()
         try:
@@ -113,7 +115,6 @@ class FileHandler(QThread):
                     if not chunk:
                         break
                     content += chunk
-                    self.file_content_loaded.emit(content, encoding)
             self.file_content_loaded.emit(content, encoding)
         except Exception as e:
             self.file_content_loaded.emit(f"Error reading file: {e}", '')
@@ -148,6 +149,7 @@ class CodeEditor(QsciScintilla):
         self.lexer = None
         self.textChanged.connect(self.update_line_number_margin)
         self.textChanged.connect(self.adjust_scroll_bar_policy)
+        self.setEolMode(QsciScintilla.EolUnix)
 
     def update_line_number_margin(self):
         total_lines = self.lines()
@@ -615,7 +617,8 @@ class ConstructWindow(QMainWindow):
     def saveFileWithEncoding(self, content, encoding):
         if self.current_file:
             try:
-                with open(self.current_file, 'w', encoding=encoding) as file:
+                content = content.replace('\r\n', '\n')
+                with open(self.current_file, 'w', encoding=encoding, newline='') as file:
                     file.write(content)
                 self.unsaved_changes = False
                 self.updateStatusBar()

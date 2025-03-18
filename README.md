@@ -10,7 +10,7 @@ Simple, fast, and professional code editor.
 Made for Windows 11.
 
 ## Installation
-You can download Scratchpad [here](https://ravendevteam.org/software/construct).
+You can download Construct [here](https://ravendevteam.org/software/construct).
 
 To compile from source, make sure you have Python 3.12.4, and Nuitka. Install the necessary dependencies from `requirements.txt`, then run `build.bat`.
 

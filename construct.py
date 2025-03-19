@@ -68,7 +68,7 @@ require a separate Python installation.
 """
 def load_plugins(app_context):
     if getattr(sys, 'frozen', False):
-        base_dir = os.path.dirname(sys.executable)
+        base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     else:
         base_dir = os.path.dirname(os.path.abspath(__file__))
     plugins_dir = os.path.join(base_dir, "plugins")

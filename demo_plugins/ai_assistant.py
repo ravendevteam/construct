@@ -52,11 +52,20 @@ class TgptWorker(QThread):
     def run(self):
         try:
             cmd = [self.tgpt_path, "--provider", "duckduckgo", "--quiet", f'"""{self.prompt}"""']
+            startupinfo = None
+            creationflags = 0
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                creationflags = subprocess.CREATE_NO_WINDOW
+
             result = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                startupinfo=startupinfo,
+                creationflags=creationflags
             )
             if result.returncode != 0:
                 output = f"Error: {result.stderr}"

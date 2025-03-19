@@ -58,7 +58,7 @@ except ImportError:
 
 """ Utility function to load plugins
 
-This function checks for a "plugins" directory (located next to the executable).
+This function checks for a "constructplugins" directory located in your user folder.
 If the folder doesn't exist, it creates it. It then loads every Python file in the
 folder (ignoring files starting with an underscore) and, if the module defines a
 "register_plugin(app_context)" function, calls it. The app_context is a dictionary
@@ -67,28 +67,28 @@ containing a reference to the main window, so plugins can integrate with Constru
 require a separate Python installation.
 """
 def load_plugins(app_context):
-    if getattr(sys, 'frozen', False):
-        base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-    else:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-    plugins_dir = os.path.join(base_dir, "plugins")
-    if not os.path.exists(plugins_dir):
-        os.makedirs(plugins_dir)
+    import os
+    import importlib.util
+    user_home = os.path.expanduser("~")
+    plugins_dir = os.path.join(user_home, "constructplugins")
+    os.makedirs(plugins_dir, exist_ok=True)
     loaded_plugins = []
-    for file in os.listdir(plugins_dir):
-        if file.endswith(".py") and not file.startswith("_"):
-            plugin_path = os.path.join(plugins_dir, file)
-            spec = importlib.util.spec_from_file_location(file[:-3], plugin_path)
+    for filename in os.listdir(plugins_dir):
+        if filename.endswith(".py") and not filename.startswith("_"):
+            plugin_path = os.path.join(plugins_dir, filename)
+            mod_name = os.path.splitext(filename)[0]
+            spec = importlib.util.spec_from_file_location(mod_name, plugin_path)
             module = importlib.util.module_from_spec(spec)
             try:
                 spec.loader.exec_module(module)
                 if hasattr(module, "register_plugin"):
                     module.register_plugin(app_context)
-                    loaded_plugins.append(file[:-3])
-                    print(f"Plugin '{file[:-3]}' loaded successfully.")
+                    loaded_plugins.append(mod_name)
+                    print(f"Plugin '{mod_name}' loaded successfully from {plugins_dir}")
             except Exception as e:
-                print(f"Failed to load plugin {file}: {e}")
+                print(f"Failed to load plugin '{filename}' from {plugins_dir}: {e}")
     return loaded_plugins
+
 
 
 """ Utility function to set the code editor font """

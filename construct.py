@@ -709,7 +709,6 @@ class ConstructWindow(QMainWindow):
         if repo_path:
             try:
                 self.repo = git.Repo(repo_path)
-                QMessageBox.information(self, "Repository Opened", f"Opened repository at {repo_path}")
                 self.setWindowTitle(f"Construct - {os.path.basename(repo_path)}")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to open repository: {e}")

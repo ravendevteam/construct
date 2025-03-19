@@ -1,11 +1,13 @@
 """ Import the necessary modules for the program to work """
 import sys
 import os
+import importlib.util
 import requests
 import validators
 import chardet
 from chardet.universaldetector import UniversalDetector
 import urllib.parse
+import git
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QAction, QFileDialog, QMessageBox, QStatusBar,
@@ -51,7 +53,42 @@ try:
     from PyQt5.Qsci import QsciLexerBatch
 except ImportError:
     QsciLexerBatch = None
-import git
+
+
+
+""" Utility function to load plugins
+
+This function checks for a "plugins" directory (located next to the executable).
+If the folder doesn't exist, it creates it. It then loads every Python file in the
+folder (ignoring files starting with an underscore) and, if the module defines a
+"register_plugin(app_context)" function, calls it. The app_context is a dictionary
+containing a reference to the main window, so plugins can integrate with Construct
+(e.g., by adding menu items). Plugins should be written in Python. They do not
+require a separate Python installation.
+"""
+def load_plugins(app_context):
+    if getattr(sys, 'frozen', False):
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    plugins_dir = os.path.join(base_dir, "plugins")
+    if not os.path.exists(plugins_dir):
+        os.makedirs(plugins_dir)
+    loaded_plugins = []
+    for file in os.listdir(plugins_dir):
+        if file.endswith(".py") and not file.startswith("_"):
+            plugin_path = os.path.join(plugins_dir, file)
+            spec = importlib.util.spec_from_file_location(file[:-3], plugin_path)
+            module = importlib.util.module_from_spec(spec)
+            try:
+                spec.loader.exec_module(module)
+                if hasattr(module, "register_plugin"):
+                    module.register_plugin(app_context)
+                    loaded_plugins.append(file[:-3])
+                    print(f"Plugin '{file[:-3]}' loaded successfully.")
+            except Exception as e:
+                print(f"Failed to load plugin {file}: {e}")
+    return loaded_plugins
 
 
 """ Utility function to set the code editor font """
@@ -68,6 +105,7 @@ def get_preferred_font():
     return QFont(family, 10)
 
 
+
 """ Worker thread for fetching online content """
 class WebFetcher(QThread):
     resultFetched = pyqtSignal(str, str)
@@ -81,6 +119,7 @@ class WebFetcher(QThread):
             self.resultFetched.emit(response.text, "")
         except Exception as e:
             self.resultFetched.emit("", str(e))
+
 
 
 """ File Handling Thread  """
@@ -114,6 +153,7 @@ class FileHandler(QThread):
             self.file_content_loaded.emit(content, encoding, self.tab)
         except Exception as e:
             self.file_content_loaded.emit(f"Error reading file: {e}", '', self.tab)
+
 
 
 """ Code Editor widget  """
@@ -231,6 +271,7 @@ class CodeEditor(QsciScintilla):
         self.selectAll()
 
 
+
 """ Create a widget that represents a single editor tab """
 class EditorTab(QWidget):
     def __init__(self, file_path=None):
@@ -260,6 +301,7 @@ class EditorTab(QWidget):
     def setLexerForCurrentFile(self):
         if self.file_path:
             self.editor.setLexerForFile(self.file_path)
+
 
 
 """ Create a class for the find and replace dialog """
@@ -324,6 +366,7 @@ class FindReplaceDialog(QDialog):
             QMessageBox.warning(self, "Empty Search", "Please enter text to find.")
 
 
+
 """ Create a class for the import From web dialog """
 class ImportFromWebDialog(QDialog):
     def __init__(self, editor):
@@ -365,6 +408,7 @@ class ImportFromWebDialog(QDialog):
         return validators.url(url) and url.startswith("https://")
 
 
+
 """ Create a class for the unsaved changes dialog """
 class UnsavedWorkDialog(QDialog):
     def __init__(self, parent=None):
@@ -389,12 +433,14 @@ class UnsavedWorkDialog(QDialog):
         self.done(2)
 
 
+
 """ Create a class for the main window """
 class ConstructWindow(QMainWindow):
     def __init__(self, file_to_open=None):
         super().__init__()
         self.current_folder = None
         self.repo = None
+        self.plugins = []
         self.loadRecentFiles()
         self.fileTreeDock = None
         self.initUI()
@@ -555,6 +601,14 @@ class ConstructWindow(QMainWindow):
         branchAction.setShortcut("Ctrl+Alt+B")
         branchAction.triggered.connect(self.switchBranch)
         menu.addAction(branchAction)
+
+    def showLoadedPlugins(self):
+        plugins_list = self.plugins if hasattr(self, "plugins") else []
+        if plugins_list:
+            plugins_str = "\n".join(plugins_list)
+        else:
+            plugins_str = "No plugins loaded."
+        QMessageBox.information(self, "Loaded Plugins", plugins_str)
 
     def newFile(self):
         new_tab = EditorTab()
@@ -903,6 +957,7 @@ class ConstructWindow(QMainWindow):
         self.updateRecentFilesMenu()
 
 
+
 """ Utility function to load the stylesheet """
 def loadStyle():
     user_css_path = os.path.join(os.path.expanduser("~"), "ctstyle.css")
@@ -929,6 +984,7 @@ def loadStyle():
             print("No QApplication instance found. Stylesheet not applied.")
 
 
+
 """ Start the program """
 if __name__ == '__main__':
     app = QApplication(sys.argv)
@@ -938,4 +994,6 @@ if __name__ == '__main__':
         file_to_open = sys.argv[1]
     window = ConstructWindow(file_to_open)
     window.show()
+    app_context = {"main_window": window}
+    window.plugins = load_plugins(app_context)
     sys.exit(app.exec_())

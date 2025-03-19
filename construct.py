@@ -9,7 +9,8 @@ import urllib.parse
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QAction, QFileDialog, QMessageBox, QStatusBar,
-    QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QInputDialog, QTextEdit, QDockWidget, QTreeView
+    QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QInputDialog,
+    QTextEdit, QDockWidget, QTreeView, QWidget, QTabWidget
 )
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QSettings, QModelIndex
 from PyQt5.QtGui import QIcon, QFont, QFontMetrics, QColor, QFontDatabase
@@ -53,7 +54,6 @@ except ImportError:
 import git
 
 
-
 """ Utility function to set the code editor font """
 def get_preferred_font():
     db = QFontDatabase()
@@ -66,7 +66,6 @@ def get_preferred_font():
     else:
         family = "monospace"
     return QFont(family, 10)
-
 
 
 """ Worker thread for fetching online content """
@@ -84,16 +83,13 @@ class WebFetcher(QThread):
             self.resultFetched.emit("", str(e))
 
 
-
 """ File Handling Thread  """
 class FileHandler(QThread):
-    file_content_loaded = pyqtSignal(str, str)
-    file_saved = pyqtSignal(bool)
-
-    def __init__(self, file_path):
+    file_content_loaded = pyqtSignal(str, str, object)
+    def __init__(self, file_path, tab):
         super().__init__()
         self.file_path = file_path
-
+        self.tab = tab
     def run(self):
         detector = UniversalDetector()
         try:
@@ -115,10 +111,9 @@ class FileHandler(QThread):
                     if not chunk:
                         break
                     content += chunk
-            self.file_content_loaded.emit(content, encoding)
+            self.file_content_loaded.emit(content, encoding, self.tab)
         except Exception as e:
-            self.file_content_loaded.emit(f"Error reading file: {e}", '')
-
+            self.file_content_loaded.emit(f"Error reading file: {e}", '', self.tab)
 
 
 """ Code Editor widget  """
@@ -236,6 +231,36 @@ class CodeEditor(QsciScintilla):
         self.selectAll()
 
 
+""" Create a widget that represents a single editor tab """
+class EditorTab(QWidget):
+    def __init__(self, file_path=None):
+        super().__init__()
+        self.file_path = file_path
+        self.encoding = "UTF-8"
+        self.unsaved_changes = False
+        self.file_handler = None
+        self.editor = CodeEditor(self)
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.editor)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(layout)
+        self.editor.textChanged.connect(self.on_text_changed)
+
+    def on_text_changed(self):
+        self.editor.setModified(True)
+        self.unsaved_changes = True
+        self.window().updateStatusBar()
+
+    def setContent(self, content, encoding):
+        self.editor.setText(content)
+        self.editor.setModified(False)
+        self.encoding = encoding
+        self.unsaved_changes = False
+
+    def setLexerForCurrentFile(self):
+        if self.file_path:
+            self.editor.setLexerForFile(self.file_path)
+
 
 """ Create a class for the find and replace dialog """
 class FindReplaceDialog(QDialog):
@@ -299,7 +324,6 @@ class FindReplaceDialog(QDialog):
             QMessageBox.warning(self, "Empty Search", "Please enter text to find.")
 
 
-
 """ Create a class for the import From web dialog """
 class ImportFromWebDialog(QDialog):
     def __init__(self, editor):
@@ -341,7 +365,6 @@ class ImportFromWebDialog(QDialog):
         return validators.url(url) and url.startswith("https://")
 
 
-
 """ Create a class for the unsaved changes dialog """
 class UnsavedWorkDialog(QDialog):
     def __init__(self, parent=None):
@@ -366,18 +389,13 @@ class UnsavedWorkDialog(QDialog):
         self.done(2)
 
 
-
 """ Create a class for the main window """
 class ConstructWindow(QMainWindow):
     def __init__(self, file_to_open=None):
         super().__init__()
-        self.current_file = file_to_open
         self.current_folder = None
-        self.file_handler = None
         self.repo = None
-        self.unsaved_changes = False
         self.loadRecentFiles()
-        self.encoding = "UTF-8"
         self.fileTreeDock = None
         self.initUI()
         if file_to_open:
@@ -387,31 +405,53 @@ class ConstructWindow(QMainWindow):
         self.setWindowTitle('Construct - Unnamed')
         self.setGeometry(100, 100, 800, 600)
         self.setWindowIcon(QIcon('construct.png'))
-        self.editor = CodeEditor(self)
-        self.setCentralWidget(self.editor)
-        self.editor.textChanged.connect(self.on_text_changed)
-        self.editor.cursorPositionChanged.connect(self.updateStatusBar)
+        self.tabWidget = QTabWidget(self)
+        self.tabWidget.setTabsClosable(True)
+        self.tabWidget.tabCloseRequested.connect(self.closeTab)
+        self.setCentralWidget(self.tabWidget)
+        self.tabWidget.currentChanged.connect(self.updateStatusBar)
         self.statusBar = QStatusBar(self)
         self.setStatusBar(self.statusBar)
         self.createMenu()
+        self.newFile()
+
+    def currentTab(self):
+        return self.tabWidget.currentWidget()
+
+    def currentEditor(self):
+        tab = self.currentTab()
+        if tab:
+            return tab.editor
+        return None
 
     def on_text_changed(self):
-        self.unsaved_changes = True
+        tab = self.currentTab()
+        if tab:
+            tab.unsaved_changes = True
+            self.updateStatusBar()
 
-    def updateStatusBar(self, line=None, index=None):
-        if line is None or index is None:
-            line, index = self.editor.getCursorPosition()
-        char_count = len(self.editor.text())
-        asterisk = "*" if self.unsaved_changes else ""
-        branch_info = ""
-        if self.repo:
-            try:
-                branch_info = f" | Branch: {self.repo.active_branch.name}"
-            except Exception:
-                branch_info = ""
-        self.statusBar.showMessage(
-            f"Line: {line+1} | Column: {index+1} | Chars: {char_count} | Encoding: {self.encoding}{asterisk}{branch_info}"
-        )
+    def updateStatusBar(self, index=None):
+        tab = self.currentTab()
+        if tab and tab.editor:
+            line, index = tab.editor.getCursorPosition()
+            char_count = len(tab.editor.text())
+            asterisk = "*" if tab.editor.isModified() else ""
+            branch_info = ""
+            if self.repo:
+                try:
+                    branch_info = f" | Branch: {self.repo.active_branch.name}"
+                except Exception:
+                    branch_info = ""
+            self.statusBar.showMessage(
+                f"Line: {line+1} | Column: {index+1} | Chars: {char_count} | Encoding: {tab.encoding}{branch_info} {asterisk}"
+            )
+            if tab.file_path:
+                self.setWindowTitle(f"Construct - {os.path.basename(tab.file_path)}")
+            else:
+                self.setWindowTitle("Construct - Unnamed")
+        else:
+            self.statusBar.clearMessage()
+            self.setWindowTitle("Construct - Unnamed")
 
     def createMenu(self):
         menubar = self.menuBar()
@@ -459,27 +499,27 @@ class ConstructWindow(QMainWindow):
     def createEditActions(self, menu):
         undoAction = QAction('Undo', self)
         undoAction.setShortcut('Ctrl+Z')
-        undoAction.triggered.connect(self.editor.undo)
+        undoAction.triggered.connect(lambda: self.currentEditor() and self.currentEditor().undo())
         menu.addAction(undoAction)
         redoAction = QAction('Redo', self)
         redoAction.setShortcut('Ctrl+Y')
-        redoAction.triggered.connect(self.editor.redo)
+        redoAction.triggered.connect(lambda: self.currentEditor() and self.currentEditor().redo())
         menu.addAction(redoAction)
         cutAction = QAction('Cut', self)
         cutAction.setShortcut('Ctrl+X')
-        cutAction.triggered.connect(self.editor.cut)
+        cutAction.triggered.connect(lambda: self.currentEditor() and self.currentEditor().cut())
         menu.addAction(cutAction)
         copyAction = QAction('Copy', self)
         copyAction.setShortcut('Ctrl+C')
-        copyAction.triggered.connect(self.editor.copy)
+        copyAction.triggered.connect(lambda: self.currentEditor() and self.currentEditor().copy())
         menu.addAction(copyAction)
         pasteAction = QAction('Paste', self)
         pasteAction.setShortcut('Ctrl+V')
-        pasteAction.triggered.connect(self.editor.paste)
+        pasteAction.triggered.connect(lambda: self.currentEditor() and self.currentEditor().paste())
         menu.addAction(pasteAction)
         selectAllAction = QAction('Select All', self)
         selectAllAction.setShortcut('Ctrl+A')
-        selectAllAction.triggered.connect(self.editor.select_all_text)
+        selectAllAction.triggered.connect(lambda: self.currentEditor() and self.currentEditor().select_all_text())
         menu.addAction(selectAllAction)
         findReplaceAction = QAction('Find and Replace...', self)
         findReplaceAction.setShortcut('Ctrl+F')
@@ -517,10 +557,10 @@ class ConstructWindow(QMainWindow):
         menu.addAction(branchAction)
 
     def newFile(self):
-        self.current_file = None
-        self.editor.setText("")
-        self.setWindowTitle('Construct - Unnamed')
-        self.unsaved_changes = False
+        new_tab = EditorTab()
+        self.tabWidget.addTab(new_tab, "Untitled")
+        self.tabWidget.setCurrentWidget(new_tab)
+        self.updateStatusBar()
 
     def openFolder(self):
         folder = QFileDialog.getExistingDirectory(self, "Open Folder")
@@ -558,19 +598,19 @@ class ConstructWindow(QMainWindow):
             self, "Open File", "", "All Files (*);;Text Files (*.txt)", options=options
         )
         if file_name:
-            self.current_file = file_name
-            self.editor.setLexerForFile(file_name)
-            self.file_handler = FileHandler(file_name)
-            self.file_handler.file_content_loaded.connect(self.loadFileContent)
-            self.file_handler.start()
+            self.openFileByPath(file_name)
 
     def openFileByPath(self, file_path):
         if file_path and os.path.isfile(file_path):
-            self.current_file = file_path
-            self.editor.setLexerForFile(file_path)
-            self.file_handler = FileHandler(file_path)
-            self.file_handler.file_content_loaded.connect(self.loadFileContent)
-            self.file_handler.start()
+            new_tab = EditorTab(file_path)
+            new_tab.setLexerForCurrentFile()
+            self.tabWidget.addTab(new_tab, os.path.basename(file_path))
+            self.tabWidget.setCurrentWidget(new_tab)
+            handler = FileHandler(file_path, new_tab)
+            new_tab.file_handler = handler
+            handler.file_content_loaded.connect(self.loadFileContent)
+            handler.finished.connect(handler.deleteLater)
+            handler.start()
 
     def onFileTreeDoubleClicked(self, index: QModelIndex):
         file_path = self.fileModel.filePath(index)
@@ -579,72 +619,90 @@ class ConstructWindow(QMainWindow):
 
     def load_file_on_startup(self, file_path):
         if os.path.exists(file_path):
-            self.current_file = file_path
-            self.editor.setLexerForFile(file_path)
-            self.file_handler = FileHandler(file_path)
-            self.file_handler.file_content_loaded.connect(self.loadFileContent)
-            self.file_handler.start()
+            new_tab = EditorTab(file_path)
+            new_tab.setLexerForCurrentFile()
+            self.tabWidget.addTab(new_tab, os.path.basename(file_path))
+            self.tabWidget.setCurrentWidget(new_tab)
+            handler = FileHandler(file_path, new_tab)
+            new_tab.file_handler = handler
+            handler.file_content_loaded.connect(self.loadFileContent)
+            handler.finished.connect(handler.deleteLater)
+            handler.start()
         else:
             QMessageBox.critical(self, "Error", f"File does not exist: {file_path}")
 
-    def loadFileContent(self, content, encoding):
+    def loadFileContent(self, content, encoding, tab):
         if encoding:
-            self.encoding = encoding
+            tab.encoding = encoding
         if content.startswith("Error reading file"):
             QMessageBox.critical(self, "Error", content)
         else:
-            self.editor.setText(content)
-            self.setWindowTitle(f'Construct - {os.path.basename(self.current_file)}')
-            if self.current_file:
-                self.addToRecentFiles(self.current_file)
+            tab.setContent(content, encoding)
+            tab.setLexerForCurrentFile()
+            if tab.file_path:
+                index = self.tabWidget.indexOf(tab)
+                self.tabWidget.setTabText(index, os.path.basename(tab.file_path))
+            self.addToRecentFiles(tab.file_path)
+        self.updateStatusBar()
 
     def saveFile(self):
-        content = self.editor.text()
-        if self.encoding is None:
-            self.encoding = 'utf-8'
+        tab = self.currentTab()
+        if not tab:
+            return
+        content = tab.editor.text()
+        if tab.encoding is None:
+            tab.encoding = 'utf-8'
         try:
-            content.encode(self.encoding)
-            if self.current_file:
-                self.saveFileWithEncoding(content, self.encoding)
-                self.unsaved_changes = False
+            content.encode(tab.encoding)
+            if tab.file_path:
+                self.saveFileWithEncoding(tab, content, tab.encoding)
+                tab.unsaved_changes = False
                 self.updateStatusBar()
             else:
                 self.saveFileAs()
         except UnicodeEncodeError:
-            self.promptForEncoding(content)
+            self.promptForEncoding(tab, content)
 
-    def promptForEncoding(self, content):
+    def promptForEncoding(self, tab, content):
         encoding, ok = QInputDialog.getItem(
             self, "Choose Encoding", "Select Encoding:",
             ["UTF-8", "ISO-8859-1", "Windows-1252", "UTF-16"], 0, False
         )
         if ok:
-            self.saveFileWithEncoding(content, encoding)
+            self.saveFileWithEncoding(tab, content, encoding)
 
-    def saveFileWithEncoding(self, content, encoding):
-        if self.current_file:
+    def saveFileWithEncoding(self, tab, content, encoding):
+        if tab.file_path:
             try:
                 content = content.replace('\r\n', '\n')
-                with open(self.current_file, 'w', encoding=encoding, newline='') as file:
+                with open(tab.file_path, 'w', encoding=encoding, newline='') as file:
                     file.write(content)
-                self.unsaved_changes = False
+                tab.unsaved_changes = False
+                tab.encoding = encoding
                 self.updateStatusBar()
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"Failed to save file with encoding '{encoding}': {e}")
 
     def saveFileAs(self):
+        tab = self.currentTab()
+        if not tab:
+            return
         options = QFileDialog.Options()
         file_name, _ = QFileDialog.getSaveFileName(
             self, "Save File As", "", "All Files (*);;Text Files (*.txt)", options=options
         )
         if file_name:
-            self.current_file = file_name
-            self.editor.setLexerForFile(file_name)
+            tab.file_path = file_name
+            tab.setLexerForCurrentFile()
+            index = self.tabWidget.currentIndex()
+            self.tabWidget.setTabText(index, os.path.basename(file_name))
             self.saveFile()
 
     def importFromWeb(self):
-        dialog = ImportFromWebDialog(self.editor)
-        dialog.exec_()
+        editor = self.currentEditor()
+        if editor:
+            dialog = ImportFromWebDialog(editor)
+            dialog.exec_()
 
     def openRepository(self):
         repo_path = QFileDialog.getExistingDirectory(self, "Select Git Repository")
@@ -751,11 +809,44 @@ class ConstructWindow(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to switch branch: {e}")
 
     def openFindReplaceDialog(self):
-        dialog = FindReplaceDialog(self.editor)
-        dialog.exec_()
+        editor = self.currentEditor()
+        if editor:
+            dialog = FindReplaceDialog(editor)
+            dialog.exec_()
+
+    def closeTab(self, index):
+        tab = self.tabWidget.widget(index)
+        if tab:
+            if tab.file_handler is not None:
+                try:
+                    if tab.file_handler.isRunning():
+                        tab.file_handler.wait()
+                except RuntimeError:
+                    pass
+                finally:
+                    tab.file_handler = None
+            if tab.unsaved_changes:
+                dialog = UnsavedWorkDialog(self)
+                result = dialog.exec_()
+                if result == QDialog.Accepted:
+                    self.tabWidget.setCurrentIndex(index)
+                    self.saveFile()
+                elif result == QDialog.Rejected:
+                    return
+                elif result == 2:
+                    pass
+            self.tabWidget.removeTab(index)
+            if self.tabWidget.count() == 0:
+                self.newFile()
 
     def closeEvent(self, event):
-        if self.unsaved_changes:
+        unsaved = False
+        for i in range(self.tabWidget.count()):
+            tab = self.tabWidget.widget(i)
+            if tab and tab.unsaved_changes:
+                unsaved = True
+                break
+        if unsaved:
             dialog = UnsavedWorkDialog(self)
             result = dialog.exec_()
             if result == QDialog.Accepted:
@@ -799,11 +890,7 @@ class ConstructWindow(QMainWindow):
 
     def openRecentFile(self, file_path):
         if os.path.exists(file_path):
-            self.current_file = file_path
-            self.editor.setLexerForFile(file_path)
-            self.file_handler = FileHandler(file_path)
-            self.file_handler.file_content_loaded.connect(self.loadFileContent)
-            self.file_handler.start()
+            self.openFileByPath(file_path)
         else:
             QMessageBox.warning(self, "File Not Found", f"File not found: {file_path}")
             if file_path in self.recent_files:
@@ -815,7 +902,6 @@ class ConstructWindow(QMainWindow):
         self.recent_files = []
         self.settings.setValue("recentFiles", self.recent_files)
         self.updateRecentFilesMenu()
-
 
 
 """ Utility function to load the stylesheet """
@@ -842,7 +928,6 @@ def loadStyle():
             app.setStyleSheet(stylesheet)
         else:
             print("No QApplication instance found. Stylesheet not applied.")
-
 
 
 """ Start the program """

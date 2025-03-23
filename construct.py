@@ -732,6 +732,7 @@ class ConstructWindow(QMainWindow):
                 with open(tab.file_path, 'w', encoding=encoding, newline='') as file:
                     file.write(content)
                 tab.unsaved_changes = False
+                tab.editor.setModified(False)
                 tab.encoding = encoding
                 self.updateStatusBar()
             except Exception as e:

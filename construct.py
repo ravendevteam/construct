@@ -988,6 +988,21 @@ def loadStyle():
 
 """ Start the program """
 if __name__ == '__main__':
+    import subprocess
+    try:
+        subprocess.run(
+            ["git", "--version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+    except Exception:
+        from PyQt5.QtWidgets import QApplication, QMessageBox
+        app = QApplication(sys.argv)
+        QMessageBox.critical(None, "Git Not Found", 
+            "Git is not installed on your system.\n\nPlease install Git to run this program.")
+        sys.exit(1)
     app = QApplication(sys.argv)
     loadStyle()
     file_to_open = None

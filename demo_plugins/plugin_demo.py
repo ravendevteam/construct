@@ -26,7 +26,7 @@ def register_plugin(app_context):
         QMessageBox.information(
             main_window,
             "Plugin Demo",
-            "Hello, World from Amp Plugin!"
+            "Hello, World from Construct Plugin!"
         )
 
     test_action.triggered.connect(show_message)

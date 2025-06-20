@@ -631,20 +631,23 @@ class ConstructWindow(QMainWindow):
             else:
                 self.repo = None
             if self.fileTreeDock is None:
-                self.fileTreeDock = QDockWidget("File Explorer", self)
-                self.fileTreeView = QTreeView(self.fileTreeDock)
-                from PyQt5.QtWidgets import QFileSystemModel
-                self.fileModel = QFileSystemModel()
-                self.fileModel.setRootPath(folder)
-                self.fileTreeView.setModel(self.fileModel)
-                self.fileTreeView.setRootIndex(self.fileModel.index(folder))
-                self.fileTreeView.doubleClicked.connect(self.onFileTreeDoubleClicked)
-                self.fileTreeDock.setWidget(self.fileTreeView)
-                self.addDockWidget(Qt.LeftDockWidgetArea, self.fileTreeDock)
+                self.createFileExplorer(folder)
             else:
                 self.fileModel.setRootPath(folder)
                 self.fileTreeView.setRootIndex(self.fileModel.index(folder))
                 self.fileTreeDock.show()
+    
+    def createFileExplorer(self, root_path):
+        self.fileTreeDock = QDockWidget("File Explorer", self)
+        self.fileTreeView = QTreeView(self.fileTreeDock)
+        from PyQt5.QtWidgets import QFileSystemModel
+        self.fileModel = QFileSystemModel()
+        self.fileModel.setRootPath(root_path)
+        self.fileTreeView.setModel(self.fileModel)
+        self.fileTreeView.setRootIndex(self.fileModel.index(root_path))
+        self.fileTreeView.doubleClicked.connect(self.onFileTreeDoubleClicked)
+        self.fileTreeDock.setWidget(self.fileTreeView)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.fileTreeDock)
 
     def openFile(self):
         options = QFileDialog.Options()
@@ -769,16 +772,7 @@ class ConstructWindow(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Failed to open repository: {e}")
             self.current_folder = repo_path
             if self.fileTreeDock is None:
-                self.fileTreeDock = QDockWidget("File Explorer", self)
-                self.fileTreeView = QTreeView(self.fileTreeDock)
-                from PyQt5.QtWidgets import QFileSystemModel
-                self.fileModel = QFileSystemModel()
-                self.fileModel.setRootPath(repo_path)
-                self.fileTreeView.setModel(self.fileModel)
-                self.fileTreeView.setRootIndex(self.fileModel.index(repo_path))
-                self.fileTreeView.doubleClicked.connect(self.onFileTreeDoubleClicked)
-                self.fileTreeDock.setWidget(self.fileTreeView)
-                self.addDockWidget(Qt.LeftDockWidgetArea, self.fileTreeDock)
+                self.createFileExplorer(repo_path)
             else:
                 self.fileModel.setRootPath(repo_path)
                 self.fileTreeView.setRootIndex(self.fileModel.index(repo_path))

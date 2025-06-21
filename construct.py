@@ -12,7 +12,7 @@ import git
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QAction, QFileDialog, QMessageBox, QStatusBar,
     QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QInputDialog,
-    QTextEdit, QDockWidget, QTreeView, QWidget, QTabWidget
+    QTextEdit, QDockWidget, QTreeView, QWidget, QTabWidget, QMenu
 )
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QSettings, QModelIndex
 from PyQt5.QtGui import QIcon, QFont, QFontMetrics, QColor, QFontDatabase
@@ -646,6 +646,7 @@ class ConstructWindow(QMainWindow):
         self.fileTreeView.setModel(self.fileModel)
         self.fileTreeView.setRootIndex(self.fileModel.index(root_path))
         self.fileTreeView.doubleClicked.connect(self.onFileTreeDoubleClicked)
+        self.setupFileTreeContextMenu()
         self.fileTreeDock.setWidget(self.fileTreeView)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.fileTreeDock)
 
@@ -673,6 +674,30 @@ class ConstructWindow(QMainWindow):
         file_path = self.fileModel.filePath(index)
         if os.path.isfile(file_path):
             self.openFileByPath(file_path)
+
+    def setupFileTreeContextMenu(self):
+        self.fileTreeView.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.fileTreeView.customContextMenuRequested.connect(self.showFileTreeContextMenu)
+
+    def showFileTreeContextMenu(self, position):
+        index = self.fileTreeView.indexAt(position)
+
+        context_menu = QMenu(self)
+
+        if index.isValid():
+            file_path = self.fileModel.filePath(index)
+            
+            test_action = QAction("Test", self)
+            test_action.triggered.connect(lambda: print(f"Test action triggered for {file_path}"))
+            context_menu.addAction(test_action)
+        else:
+            root_path = self.fileModel.rootPath()
+
+            test_action = QAction("Test", self)
+            test_action.triggered.connect(lambda: print(f"Test action triggered for {root_path}"))
+            context_menu.addAction(test_action)
+
+        context_menu.exec_(self.fileTreeView.viewport().mapToGlobal(position))
 
     def load_file_on_startup(self, file_path):
         if os.path.exists(file_path):

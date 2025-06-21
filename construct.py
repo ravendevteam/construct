@@ -720,6 +720,19 @@ class ConstructWindow(QMainWindow):
                 delete_action = QAction("Delete Directory", self)
                 delete_action.triggered.connect(lambda: self.deleteFileOrDir(file_path))
                 context_menu.addAction(delete_action)
+
+            cut_action = QAction("Cut", self)
+            cut_action.triggered.connect(lambda: self.cutFileOrDir(file_path))
+            context_menu.addAction(cut_action)
+            
+            copy_action = QAction("Copy", self)
+            copy_action.triggered.connect(lambda: self.copyFileOrDir(file_path))
+            context_menu.addAction(copy_action)
+            
+            if hasattr(self, 'copied_file_path'):
+                paste_action = QAction("Paste", self)
+                paste_action.triggered.connect(lambda: self.pasteFileOrDir(file_path))
+                context_menu.addAction(paste_action)
         else:
             root_path = self.fileModel.rootPath()
 
@@ -734,6 +747,11 @@ class ConstructWindow(QMainWindow):
             create_submenu.addAction(new_dir_action)
 
             context_menu.addMenu(create_submenu)
+
+            if hasattr(self, 'copied_file_path'):
+                paste_action = QAction("Paste", self)
+                paste_action.triggered.connect(lambda: self.pasteFileOrDir(root_path))
+                context_menu.addAction(paste_action)
 
         context_menu.exec_(self.fileTreeView.viewport().mapToGlobal(position))
 
@@ -809,6 +827,73 @@ class ConstructWindow(QMainWindow):
                     os.remove(path)
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to delete: {e}")
+
+    def copyFileOrDir(self, path):
+        self.copied_file_path = path
+        self.is_cut_operation = False
+        QMessageBox.information(self, "Copy", f"'{os.path.basename(path)}' copied to clipboard")
+    
+    def cutFileOrDir(self, path):
+        self.copied_file_path = path
+        self.is_cut_operation = True
+        QMessageBox.information(self, "Cut", f"'{os.path.basename(path)}' cut to clipboard")
+    
+    def pasteFileOrDir(self, dest_path):
+        if not hasattr(self, 'copied_file_path') or not self.copied_file_path:
+            return
+            
+        if os.path.isfile(dest_path):
+            dest_path = os.path.dirname(dest_path)
+            
+        source_path = self.copied_file_path
+        source_name = os.path.basename(source_path)
+        target_path = os.path.join(dest_path, source_name)
+        
+        is_cut = hasattr(self, 'is_cut_operation') and self.is_cut_operation
+        if is_cut and os.path.normpath(os.path.dirname(source_path)) == os.path.normpath(dest_path):
+            return
+        
+        if os.path.isdir(source_path) and dest_path.startswith(source_path):
+            return
+            
+        if os.path.exists(target_path):
+            reply = QMessageBox.question(
+                self, "File Exists", 
+                f"'{source_name}' already exists in destination. Overwrite?", 
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            )
+            if reply == QMessageBox.No:
+                return
+                
+        try:
+            if is_cut:
+                for i in range(self.tabWidget.count()-1, -1, -1):
+                    tab = self.tabWidget.widget(i)
+                    if tab and tab.file_path:
+                        if os.path.isdir(source_path) and tab.file_path.startswith(source_path):
+                            self.tabWidget.removeTab(i)
+                        elif tab.file_path == source_path:
+                            self.tabWidget.removeTab(i)
+                
+                if os.path.exists(target_path):
+                    if os.path.isdir(target_path):
+                        shutil.rmtree(target_path)
+                    else:
+                        os.remove(target_path)
+                
+                shutil.move(source_path, target_path)
+                
+                self.copied_file_path = None
+                self.is_cut_operation = False
+            else:
+                if os.path.isdir(source_path):
+                    if os.path.exists(target_path):
+                        shutil.rmtree(target_path)
+                    shutil.copytree(source_path, target_path)
+                else:
+                    shutil.copy2(source_path, target_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to paste: {e}")
 
     def load_file_on_startup(self, file_path):
         if os.path.exists(file_path):

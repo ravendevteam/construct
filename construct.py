@@ -13,9 +13,10 @@ import shutil
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QAction, QFileDialog, QMessageBox, QStatusBar,
     QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QInputDialog,
-    QTextEdit, QDockWidget, QTreeView, QWidget, QTabWidget, QMenu
+    QTextEdit, QDockWidget, QTreeView, QWidget, QTabWidget, QMenu, QToolBar, QStyle,
+    QSizePolicy
 )
-from PyQt5.QtCore import QThread, pyqtSignal, Qt, QSettings, QModelIndex
+from PyQt5.QtCore import QThread, pyqtSignal, Qt, QSettings, QModelIndex, QSize
 from PyQt5.QtGui import QIcon, QFont, QFontMetrics, QColor, QFontDatabase
 from PyQt5.Qsci import QsciScintilla, QsciLexerPython, QsciLexerHTML, QsciLexerCPP
 try:
@@ -640,7 +641,44 @@ class ConstructWindow(QMainWindow):
     
     def createFileExplorer(self, root_path):
         self.fileTreeDock = QDockWidget("File Explorer", self)
-        self.fileTreeView = QTreeView(self.fileTreeDock)
+        
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        toolbar = QToolBar()
+        toolbar.setIconSize(QSize(16, 16))
+        toolbar.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        toolbar.setStyleSheet("QToolBar { border: none; padding: 0px; margin: 0px; }")
+        toolbar.setContentsMargins(0, 0, 5, 0)
+        toolbar.setFixedHeight(28)
+        
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        toolbar.addWidget(spacer)
+        
+        refreshAction = QAction("Refresh", self)
+        refreshAction.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
+        refreshAction.setToolTip("Refresh File Explorer")
+        refreshAction.triggered.connect(self.refreshFileExplorer)
+        toolbar.addAction(refreshAction)
+        
+        newFileAction = QAction("New File", self)
+        newFileAction.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
+        newFileAction.setToolTip("Create New File")
+        newFileAction.triggered.connect(lambda: self.createNewFile(root_path))
+        toolbar.addAction(newFileAction)
+        
+        newFolderAction = QAction("New Folder", self)
+        newFolderAction.setIcon(self.style().standardIcon(QStyle.SP_DirIcon))
+        newFolderAction.setToolTip("Create New Folder")
+        newFolderAction.triggered.connect(lambda: self.createNewDirectory(root_path))
+        toolbar.addAction(newFolderAction)
+        
+        layout.addWidget(toolbar)
+        
+        self.fileTreeView = QTreeView(container)
         from PyQt5.QtWidgets import QFileSystemModel
         self.fileModel = QFileSystemModel()
         self.fileModel.setRootPath(root_path)
@@ -648,7 +686,11 @@ class ConstructWindow(QMainWindow):
         self.fileTreeView.setRootIndex(self.fileModel.index(root_path))
         self.fileTreeView.doubleClicked.connect(self.onFileTreeDoubleClicked)
         self.setupFileTreeContextMenu()
-        self.fileTreeDock.setWidget(self.fileTreeView)
+        
+        layout.addWidget(self.fileTreeView)
+        
+        self.fileTreeDock.setWidget(container)
+        
         self.addDockWidget(Qt.LeftDockWidgetArea, self.fileTreeDock)
 
     def openFile(self):
@@ -724,7 +766,7 @@ class ConstructWindow(QMainWindow):
                 context_menu.addAction(delete_action)
     
             context_menu.addSeparator()
-    
+
             cut_action = QAction("Cut", self)
             cut_action.triggered.connect(lambda: self.cutFileOrDir(file_path))
             context_menu.addAction(cut_action)
@@ -1175,6 +1217,12 @@ class ConstructWindow(QMainWindow):
         self.recent_files = []
         self.settings.setValue("recentFiles", self.recent_files)
         self.updateRecentFilesMenu()
+    
+    def refreshFileExplorer(self):
+        if hasattr(self, 'fileModel') and self.fileModel:
+            current_path = self.fileModel.rootPath()
+            self.fileModel.setRootPath("")
+            self.fileModel.setRootPath(current_path)
 
 
 

@@ -8,6 +8,7 @@ import chardet
 from chardet.universaldetector import UniversalDetector
 import urllib.parse
 import git
+import shutil
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QAction, QFileDialog, QMessageBox, QStatusBar,
@@ -702,6 +703,23 @@ class ConstructWindow(QMainWindow):
             create_submenu.addAction(new_dir_action)
             
             context_menu.addMenu(create_submenu)
+
+            if not self.fileModel.isDir(index):
+                rename_action = QAction("Rename", self)
+                rename_action.triggered.connect(lambda: self.renameFileOrDir(file_path))
+                context_menu.addAction(rename_action)
+                
+                delete_action = QAction("Delete", self)
+                delete_action.triggered.connect(lambda: self.deleteFileOrDir(file_path))
+                context_menu.addAction(delete_action)
+            else:
+                rename_action = QAction("Rename", self)
+                rename_action.triggered.connect(lambda: self.renameFileOrDir(file_path))
+                context_menu.addAction(rename_action)
+                
+                delete_action = QAction("Delete Directory", self)
+                delete_action.triggered.connect(lambda: self.deleteFileOrDir(file_path))
+                context_menu.addAction(delete_action)
         else:
             root_path = self.fileModel.rootPath()
 
@@ -748,6 +766,49 @@ class ConstructWindow(QMainWindow):
                 os.makedirs(dir_path, exist_ok=True)
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to create directory: {e}")
+
+    def renameFileOrDir(self, path):
+        old_name = os.path.basename(path)
+        new_name, ok = QInputDialog.getText(self, "Rename", "Enter new name:", text=old_name)
+        if ok and new_name and new_name != old_name:
+            new_path = os.path.join(os.path.dirname(path), new_name)
+            try:
+                for i in range(self.tabWidget.count()):
+                    tab = self.tabWidget.widget(i)
+                    if tab and tab.file_path == path:
+                        tab.file_path = new_path
+                        self.tabWidget.setTabText(i, new_name)
+                
+                os.rename(path, new_path)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to rename: {e}")
+    
+    def deleteFileOrDir(self, path):
+        name = os.path.basename(path)
+        if os.path.isdir(path):
+            msg = f"Are you sure you want to delete the directory '{name}' and all its contents?"
+        else:
+            msg = f"Are you sure you want to delete '{name}'?"
+            
+        reply = QMessageBox.question(self, "Confirm Delete", msg, 
+                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            try:
+                for i in range(self.tabWidget.count()-1, -1, -1):
+                    tab = self.tabWidget.widget(i)
+                    if tab and tab.file_path:
+                        if os.path.isdir(path) and tab.file_path.startswith(path):
+                            self.tabWidget.removeTab(i)
+                        elif tab.file_path == path:
+                            self.tabWidget.removeTab(i)
+                
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to delete: {e}")
 
     def load_file_on_startup(self, file_path):
         if os.path.exists(file_path):

@@ -692,6 +692,8 @@ class ConstructWindow(QMainWindow):
             open_action.triggered.connect(lambda: self.onFileTreeDoubleClicked(index))
             context_menu.addAction(open_action)
 
+            context_menu.addSeparator()
+
             create_submenu = QMenu("Create", context_menu)
             
             new_file_action = QAction("New File", self)
@@ -720,7 +722,9 @@ class ConstructWindow(QMainWindow):
                 delete_action = QAction("Delete Directory", self)
                 delete_action.triggered.connect(lambda: self.deleteFileOrDir(file_path))
                 context_menu.addAction(delete_action)
-
+    
+            context_menu.addSeparator()
+    
             cut_action = QAction("Cut", self)
             cut_action.triggered.connect(lambda: self.cutFileOrDir(file_path))
             context_menu.addAction(cut_action)

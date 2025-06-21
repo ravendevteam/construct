@@ -687,15 +687,11 @@ class ConstructWindow(QMainWindow):
         if index.isValid():
             file_path = self.fileModel.filePath(index)
             
-            test_action = QAction("Test", self)
-            test_action.triggered.connect(lambda: print(f"Test action triggered for {file_path}"))
-            context_menu.addAction(test_action)
+            open_action = QAction("Open", self)
+            open_action.triggered.connect(lambda: self.onFileTreeDoubleClicked(index))
+            context_menu.addAction(open_action)
         else:
             root_path = self.fileModel.rootPath()
-
-            test_action = QAction("Test", self)
-            test_action.triggered.connect(lambda: print(f"Test action triggered for {root_path}"))
-            context_menu.addAction(test_action)
 
         context_menu.exec_(self.fileTreeView.viewport().mapToGlobal(position))
 

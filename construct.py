@@ -690,10 +690,64 @@ class ConstructWindow(QMainWindow):
             open_action = QAction("Open", self)
             open_action.triggered.connect(lambda: self.onFileTreeDoubleClicked(index))
             context_menu.addAction(open_action)
+
+            create_submenu = QMenu("Create", context_menu)
+            
+            new_file_action = QAction("New File", self)
+            new_file_action.triggered.connect(lambda: self.createNewFile(file_path))
+            create_submenu.addAction(new_file_action)
+            
+            new_dir_action = QAction("New Directory", self)
+            new_dir_action.triggered.connect(lambda: self.createNewDirectory(file_path))
+            create_submenu.addAction(new_dir_action)
+            
+            context_menu.addMenu(create_submenu)
         else:
             root_path = self.fileModel.rootPath()
 
+            create_submenu = QMenu("Create", context_menu)
+            
+            new_file_action = QAction("New File", self)
+            new_file_action.triggered.connect(lambda: self.createNewFile(root_path))
+            create_submenu.addAction(new_file_action)
+            
+            new_dir_action = QAction("New Directory", self)
+            new_dir_action.triggered.connect(lambda: self.createNewDirectory(root_path))
+            create_submenu.addAction(new_dir_action)
+
+            context_menu.addMenu(create_submenu)
+
         context_menu.exec_(self.fileTreeView.viewport().mapToGlobal(position))
+
+    def createNewFile(self, path):
+        if os.path.isfile(path):
+            directory = os.path.dirname(path)
+        else:
+            directory = path
+            
+        file_name, ok = QInputDialog.getText(self, "New File", "Enter file name:")
+        if ok and file_name:
+            file_path = os.path.join(directory, file_name)
+            try:
+                with open(file_path, 'w') as f:
+                    f.write("")
+                self.openFileByPath(file_path)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to create file: {e}")
+    
+    def createNewDirectory(self, path):
+        if os.path.isfile(path):
+            directory = os.path.dirname(path)
+        else:
+            directory = path
+            
+        dir_name, ok = QInputDialog.getText(self, "New Directory", "Enter directory name:")
+        if ok and dir_name:
+            dir_path = os.path.join(directory, dir_name)
+            try:
+                os.makedirs(dir_path, exist_ok=True)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to create directory: {e}")
 
     def load_file_on_startup(self, file_path):
         if os.path.exists(file_path):

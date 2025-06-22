@@ -877,12 +877,10 @@ class ConstructWindow(QMainWindow):
     def copyFileOrDir(self, path):
         self.copied_file_path = path
         self.is_cut_operation = False
-        QMessageBox.information(self, "Copy", f"'{os.path.basename(path)}' copied to clipboard")
     
     def cutFileOrDir(self, path):
         self.copied_file_path = path
         self.is_cut_operation = True
-        QMessageBox.information(self, "Cut", f"'{os.path.basename(path)}' cut to clipboard")
     
     def pasteFileOrDir(self, dest_path):
         if not hasattr(self, 'copied_file_path') or not self.copied_file_path:

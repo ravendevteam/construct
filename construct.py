@@ -7,7 +7,6 @@ import validators
 import chardet
 from chardet.universaldetector import UniversalDetector
 import urllib.parse
-import git
 import shutil
 
 from PyQt5.QtWidgets import (
@@ -1268,6 +1267,7 @@ if __name__ == '__main__':
         QMessageBox.critical(None, "Git Not Found", 
             "Git is not installed on your system.\n\nPlease install Git to run this program.")
         sys.exit(1)
+    import git
     app = QApplication(sys.argv)
     loadStyle()
     file_to_open = None

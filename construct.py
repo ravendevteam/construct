@@ -1252,6 +1252,12 @@ def loadStyle():
 
 """ Start the program """
 if __name__ == '__main__':
+    if os.name != "nt":
+        app = QApplication(sys.argv)
+        QMessageBox.critical(None, "Not using Windows", 
+            "You are not using a Microsoft Windows operating system.\nConstruct does not support Linux or macOS.")
+        sys.exit(1)
+
     import subprocess
     try:
         subprocess.run(

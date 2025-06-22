@@ -8,13 +8,15 @@ import chardet
 from chardet.universaldetector import UniversalDetector
 import urllib.parse
 import git
+import shutil
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QAction, QFileDialog, QMessageBox, QStatusBar,
     QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QInputDialog,
-    QTextEdit, QDockWidget, QTreeView, QWidget, QTabWidget
+    QTextEdit, QDockWidget, QTreeView, QWidget, QTabWidget, QMenu, QToolBar, QStyle,
+    QSizePolicy
 )
-from PyQt5.QtCore import QThread, pyqtSignal, Qt, QSettings, QModelIndex
+from PyQt5.QtCore import QThread, pyqtSignal, Qt, QSettings, QModelIndex, QSize
 from PyQt5.QtGui import QIcon, QFont, QFontMetrics, QColor, QFontDatabase
 from PyQt5.Qsci import QsciScintilla, QsciLexerPython, QsciLexerHTML, QsciLexerCPP
 try:
@@ -631,20 +633,65 @@ class ConstructWindow(QMainWindow):
             else:
                 self.repo = None
             if self.fileTreeDock is None:
-                self.fileTreeDock = QDockWidget("File Explorer", self)
-                self.fileTreeView = QTreeView(self.fileTreeDock)
-                from PyQt5.QtWidgets import QFileSystemModel
-                self.fileModel = QFileSystemModel()
-                self.fileModel.setRootPath(folder)
-                self.fileTreeView.setModel(self.fileModel)
-                self.fileTreeView.setRootIndex(self.fileModel.index(folder))
-                self.fileTreeView.doubleClicked.connect(self.onFileTreeDoubleClicked)
-                self.fileTreeDock.setWidget(self.fileTreeView)
-                self.addDockWidget(Qt.LeftDockWidgetArea, self.fileTreeDock)
+                self.createFileExplorer(folder)
             else:
                 self.fileModel.setRootPath(folder)
                 self.fileTreeView.setRootIndex(self.fileModel.index(folder))
                 self.fileTreeDock.show()
+    
+    def createFileExplorer(self, root_path):
+        self.fileTreeDock = QDockWidget("File Explorer", self)
+        
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        toolbar = QToolBar()
+        toolbar.setIconSize(QSize(16, 16))
+        toolbar.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        toolbar.setStyleSheet("QToolBar { border: none; padding: 0px; margin: 0px; }")
+        toolbar.setContentsMargins(0, 0, 5, 0)
+        toolbar.setFixedHeight(28)
+        
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        toolbar.addWidget(spacer)
+        
+        refreshAction = QAction("Refresh", self)
+        refreshAction.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
+        refreshAction.setToolTip("Refresh File Explorer")
+        refreshAction.triggered.connect(self.refreshFileExplorer)
+        toolbar.addAction(refreshAction)
+        
+        newFileAction = QAction("New File", self)
+        newFileAction.setIcon(self.style().standardIcon(QStyle.SP_FileIcon))
+        newFileAction.setToolTip("Create New File")
+        newFileAction.triggered.connect(lambda: self.createNewFile(root_path))
+        toolbar.addAction(newFileAction)
+        
+        newFolderAction = QAction("New Folder", self)
+        newFolderAction.setIcon(self.style().standardIcon(QStyle.SP_DirIcon))
+        newFolderAction.setToolTip("Create New Folder")
+        newFolderAction.triggered.connect(lambda: self.createNewDirectory(root_path))
+        toolbar.addAction(newFolderAction)
+        
+        layout.addWidget(toolbar)
+        
+        self.fileTreeView = QTreeView(container)
+        from PyQt5.QtWidgets import QFileSystemModel
+        self.fileModel = QFileSystemModel()
+        self.fileModel.setRootPath(root_path)
+        self.fileTreeView.setModel(self.fileModel)
+        self.fileTreeView.setRootIndex(self.fileModel.index(root_path))
+        self.fileTreeView.doubleClicked.connect(self.onFileTreeDoubleClicked)
+        self.setupFileTreeContextMenu()
+        
+        layout.addWidget(self.fileTreeView)
+        
+        self.fileTreeDock.setWidget(container)
+        
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.fileTreeDock)
 
     def openFile(self):
         options = QFileDialog.Options()
@@ -670,6 +717,227 @@ class ConstructWindow(QMainWindow):
         file_path = self.fileModel.filePath(index)
         if os.path.isfile(file_path):
             self.openFileByPath(file_path)
+
+    def setupFileTreeContextMenu(self):
+        self.fileTreeView.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.fileTreeView.customContextMenuRequested.connect(self.showFileTreeContextMenu)
+
+    def showFileTreeContextMenu(self, position):
+        index = self.fileTreeView.indexAt(position)
+
+        context_menu = QMenu(self)
+
+        if index.isValid():
+            file_path = self.fileModel.filePath(index)
+            
+            open_action = QAction("Open", self)
+            open_action.triggered.connect(lambda: self.onFileTreeDoubleClicked(index))
+            context_menu.addAction(open_action)
+
+            context_menu.addSeparator()
+
+            create_submenu = QMenu("Create", context_menu)
+            
+            new_file_action = QAction("New File", self)
+            new_file_action.triggered.connect(lambda: self.createNewFile(file_path))
+            create_submenu.addAction(new_file_action)
+            
+            new_dir_action = QAction("New Directory", self)
+            new_dir_action.triggered.connect(lambda: self.createNewDirectory(file_path))
+            create_submenu.addAction(new_dir_action)
+            
+            context_menu.addMenu(create_submenu)
+
+            if not self.fileModel.isDir(index):
+                rename_action = QAction("Rename", self)
+                rename_action.triggered.connect(lambda: self.renameFileOrDir(file_path))
+                context_menu.addAction(rename_action)
+                
+                delete_action = QAction("Delete", self)
+                delete_action.triggered.connect(lambda: self.deleteFileOrDir(file_path))
+                context_menu.addAction(delete_action)
+            else:
+                rename_action = QAction("Rename", self)
+                rename_action.triggered.connect(lambda: self.renameFileOrDir(file_path))
+                context_menu.addAction(rename_action)
+                
+                delete_action = QAction("Delete Directory", self)
+                delete_action.triggered.connect(lambda: self.deleteFileOrDir(file_path))
+                context_menu.addAction(delete_action)
+    
+            context_menu.addSeparator()
+
+            cut_action = QAction("Cut", self)
+            cut_action.triggered.connect(lambda: self.cutFileOrDir(file_path))
+            context_menu.addAction(cut_action)
+            
+            copy_action = QAction("Copy", self)
+            copy_action.triggered.connect(lambda: self.copyFileOrDir(file_path))
+            context_menu.addAction(copy_action)
+            
+            if hasattr(self, 'copied_file_path'):
+                paste_action = QAction("Paste", self)
+                paste_action.triggered.connect(lambda: self.pasteFileOrDir(file_path))
+                context_menu.addAction(paste_action)
+        else:
+            root_path = self.fileModel.rootPath()
+
+            create_submenu = QMenu("Create", context_menu)
+            
+            new_file_action = QAction("New File", self)
+            new_file_action.triggered.connect(lambda: self.createNewFile(root_path))
+            create_submenu.addAction(new_file_action)
+            
+            new_dir_action = QAction("New Directory", self)
+            new_dir_action.triggered.connect(lambda: self.createNewDirectory(root_path))
+            create_submenu.addAction(new_dir_action)
+
+            context_menu.addMenu(create_submenu)
+
+            if hasattr(self, 'copied_file_path'):
+                paste_action = QAction("Paste", self)
+                paste_action.triggered.connect(lambda: self.pasteFileOrDir(root_path))
+                context_menu.addAction(paste_action)
+
+        context_menu.exec_(self.fileTreeView.viewport().mapToGlobal(position))
+
+    def createNewFile(self, path):
+        if os.path.isfile(path):
+            directory = os.path.dirname(path)
+        else:
+            directory = path
+            
+        file_name, ok = QInputDialog.getText(self, "New File", "Enter file name:")
+        if ok and file_name:
+            file_path = os.path.join(directory, file_name)
+            try:
+                with open(file_path, 'w') as f:
+                    f.write("")
+                self.openFileByPath(file_path)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to create file: {e}")
+    
+    def createNewDirectory(self, path):
+        if os.path.isfile(path):
+            directory = os.path.dirname(path)
+        else:
+            directory = path
+            
+        dir_name, ok = QInputDialog.getText(self, "New Directory", "Enter directory name:")
+        if ok and dir_name:
+            dir_path = os.path.join(directory, dir_name)
+            try:
+                os.makedirs(dir_path, exist_ok=True)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to create directory: {e}")
+
+    def renameFileOrDir(self, path):
+        old_name = os.path.basename(path)
+        new_name, ok = QInputDialog.getText(self, "Rename", "Enter new name:", text=old_name)
+        if ok and new_name and new_name != old_name:
+            new_path = os.path.join(os.path.dirname(path), new_name)
+            try:
+                for i in range(self.tabWidget.count()):
+                    tab = self.tabWidget.widget(i)
+                    if tab and tab.file_path == path:
+                        tab.file_path = new_path
+                        self.tabWidget.setTabText(i, new_name)
+                
+                os.rename(path, new_path)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to rename: {e}")
+    
+    def deleteFileOrDir(self, path):
+        name = os.path.basename(path)
+        if os.path.isdir(path):
+            msg = f"Are you sure you want to delete the directory '{name}' and all its contents?"
+        else:
+            msg = f"Are you sure you want to delete '{name}'?"
+            
+        reply = QMessageBox.question(self, "Confirm Delete", msg, 
+                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            try:
+                for i in range(self.tabWidget.count()-1, -1, -1):
+                    tab = self.tabWidget.widget(i)
+                    if tab and tab.file_path:
+                        if os.path.isdir(path) and tab.file_path.startswith(path):
+                            self.tabWidget.removeTab(i)
+                        elif tab.file_path == path:
+                            self.tabWidget.removeTab(i)
+                
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                else:
+                    os.remove(path)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to delete: {e}")
+
+    def copyFileOrDir(self, path):
+        self.copied_file_path = path
+        self.is_cut_operation = False
+    
+    def cutFileOrDir(self, path):
+        self.copied_file_path = path
+        self.is_cut_operation = True
+    
+    def pasteFileOrDir(self, dest_path):
+        if not hasattr(self, 'copied_file_path') or not self.copied_file_path:
+            return
+            
+        if os.path.isfile(dest_path):
+            dest_path = os.path.dirname(dest_path)
+            
+        source_path = self.copied_file_path
+        source_name = os.path.basename(source_path)
+        target_path = os.path.join(dest_path, source_name)
+        
+        is_cut = hasattr(self, 'is_cut_operation') and self.is_cut_operation
+        if is_cut and os.path.normpath(os.path.dirname(source_path)) == os.path.normpath(dest_path):
+            return
+        
+        if os.path.isdir(source_path) and dest_path.startswith(source_path):
+            return
+            
+        if os.path.exists(target_path):
+            reply = QMessageBox.question(
+                self, "File Exists", 
+                f"'{source_name}' already exists in destination. Overwrite?", 
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            )
+            if reply == QMessageBox.No:
+                return
+                
+        try:
+            if is_cut:
+                for i in range(self.tabWidget.count()-1, -1, -1):
+                    tab = self.tabWidget.widget(i)
+                    if tab and tab.file_path:
+                        if os.path.isdir(source_path) and tab.file_path.startswith(source_path):
+                            self.tabWidget.removeTab(i)
+                        elif tab.file_path == source_path:
+                            self.tabWidget.removeTab(i)
+                
+                if os.path.exists(target_path):
+                    if os.path.isdir(target_path):
+                        shutil.rmtree(target_path)
+                    else:
+                        os.remove(target_path)
+                
+                shutil.move(source_path, target_path)
+                
+                self.copied_file_path = None
+                self.is_cut_operation = False
+            else:
+                if os.path.isdir(source_path):
+                    if os.path.exists(target_path):
+                        shutil.rmtree(target_path)
+                    shutil.copytree(source_path, target_path)
+                else:
+                    shutil.copy2(source_path, target_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to paste: {e}")
 
     def load_file_on_startup(self, file_path):
         if os.path.exists(file_path):
@@ -769,16 +1037,7 @@ class ConstructWindow(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Failed to open repository: {e}")
             self.current_folder = repo_path
             if self.fileTreeDock is None:
-                self.fileTreeDock = QDockWidget("File Explorer", self)
-                self.fileTreeView = QTreeView(self.fileTreeDock)
-                from PyQt5.QtWidgets import QFileSystemModel
-                self.fileModel = QFileSystemModel()
-                self.fileModel.setRootPath(repo_path)
-                self.fileTreeView.setModel(self.fileModel)
-                self.fileTreeView.setRootIndex(self.fileModel.index(repo_path))
-                self.fileTreeView.doubleClicked.connect(self.onFileTreeDoubleClicked)
-                self.fileTreeDock.setWidget(self.fileTreeView)
-                self.addDockWidget(Qt.LeftDockWidgetArea, self.fileTreeDock)
+                self.createFileExplorer(repo_path)
             else:
                 self.fileModel.setRootPath(repo_path)
                 self.fileTreeView.setRootIndex(self.fileModel.index(repo_path))
@@ -956,6 +1215,12 @@ class ConstructWindow(QMainWindow):
         self.recent_files = []
         self.settings.setValue("recentFiles", self.recent_files)
         self.updateRecentFilesMenu()
+    
+    def refreshFileExplorer(self):
+        if hasattr(self, 'fileModel') and self.fileModel:
+            current_path = self.fileModel.rootPath()
+            self.fileModel.setRootPath("")
+            self.fileModel.setRootPath(current_path)
 
 
 

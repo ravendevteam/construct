@@ -486,6 +486,21 @@ class Editor(QsciScintilla):
             self.setBackspaceUnindents(True)
         except Exception:
             pass
+        try:
+            if hasattr(QsciScintilla, 'AcsDocument') and hasattr(self, 'setAutoCompletionSource'):
+                self.setAutoCompletionSource(QsciScintilla.AcsDocument)
+            if hasattr(self, 'setAutoCompletionThreshold'):
+                self.setAutoCompletionThreshold(1)
+            if hasattr(self, 'setAutoCompletionCaseSensitivity'):
+                self.setAutoCompletionCaseSensitivity(False)
+            if hasattr(self, 'setAutoCompletionReplaceWord'):
+                self.setAutoCompletionReplaceWord(True)
+            if hasattr(self, 'setAutoCompletionUseSingle'):
+                self.setAutoCompletionUseSingle(True)
+            if hasattr(self, 'setAutoCompletionShowSingle'):
+                self.setAutoCompletionShowSingle(True)
+        except Exception:
+            pass
         self.setEolMode(QsciScintilla.EolWindows)
         self._zoom = 0
         self.setUtf8(True) if hasattr(self, 'setUtf8') else None

@@ -4,3 +4,4 @@ chardet
 PyQt5
 gitpython
 QScintilla
+termqt

@@ -1,3 +1,4 @@
+import logging
 import sys
 import os
 import requests
@@ -9,11 +10,13 @@ import shutil
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QAction,
                              QFileDialog, QMessageBox, QStatusBar, QDialog, QInputDialog,
                              QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QComboBox,
-                             QDockWidget, QTreeView, QToolBar, QSizePolicy, QMenu, QWidget, QFileSystemModel, QStyle, QTabWidget, QTextEdit)
-from PyQt5.QtCore import QThread, pyqtSignal, Qt, QSettings, QSignalBlocker, QSize
+                             QDockWidget, QTreeView, QToolBar, QSizePolicy, QMenu, QWidget, QFileSystemModel, QStyle, QTabWidget, QTextEdit, QScrollBar)
+from PyQt5.QtCore import QThread, pyqtSignal, Qt, QSettings, QSignalBlocker, QSize, QTimer
 from PyQt5.QtGui import QIcon, QFont, QFontDatabase, QTextDocument
 from PyQt5.Qsci import QsciScintilla, QsciScintillaBase
 from PyQt5 import Qsci as _Qsci
+import termqt
+from termqt import Terminal
 import urllib.parse
 try:
     import git as _gitpy
@@ -268,7 +271,42 @@ def get_preferred_font():
         return fallback
     return QFont(family, 10)
 
+class TerminalWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.logger = logging.Logger('construct-terminal')
+        self.logger.setLevel(logging.CRITICAL)
 
+        layout = QHBoxLayout()
+        self.terminal = Terminal(400, 400, logger=self.logger)
+        self.terminal.set_font()
+        self.terminal.maximum_line_history = 2000
+
+        scroll = QScrollBar(Qt.Vertical, self.terminal)
+        self.terminal.connect_scroll_bar(scroll)
+
+        layout.addWidget(self.terminal)
+        layout.addWidget(scroll)
+        layout.setSpacing(0)
+        self.setLayout(layout)
+
+        self.auto_wrap_enabled = True
+        shell_bin = "cmd"
+        from termqt import TerminalWinptyIO
+        self.terminal_io = TerminalWinptyIO(
+            self.terminal.row_len,
+            self.terminal.col_len,
+            shell_bin,
+            logger=self.logger
+        )
+        self.auto_wrap_enabled = False
+        self.terminal_io.stdout_callback = self.terminal.stdout
+        self.terminal.stdin_callback = self.terminal_io.write
+        self.terminal.resize_callback = self.terminal_io.resize
+        self.terminal_io.spawn()
+        QTimer.singleShot(0, self._finalize_wrap)
+    def _finalize_wrap(self):
+        self.terminal.enable_auto_wrap(self.auto_wrap_enabled)
 
 class FindReplaceDialog(QDialog):
     def __init__(self, text_edit):
@@ -940,7 +978,19 @@ class Construct(QMainWindow):
         self.column = 1
         self.char_count = 0
         self.createMenu()
+        self.terminalDock = QDockWidget("Terminal", self)
+        self.terminalDock.setVisible(False)
+        self.terminal = TerminalWidget()
+        self.terminalDock.setWidget(self.terminal)
+        self.terminalDock.setAllowedAreas(Qt.BottomDockWidgetArea)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.terminalDock)
+        self.isTerminalVisible = False
         self.newFile()
+
+    def toggle_terminal(self):
+        state = False if self.isTerminalVisible else True
+        self.terminalDock.setVisible(state)
+        self.isTerminalVisible = state
 
     def on_text_changed(self):
         ed = self.currentEditor()
@@ -1052,10 +1102,7 @@ class Construct(QMainWindow):
         menu.addAction(undoAction)
         self.actions['undo'] = undoAction
         redoAction = QAction('Redo', self)
-        if sys.platform != 'darwin':
-            redoAction.setShortcuts(['Ctrl+Y', 'Ctrl+Shift+Z'])
-        else:
-            redoAction.setShortcuts(['Ctrl+Shift+Z', 'Ctrl+Y'])
+        redoAction.setShortcuts(['Ctrl+Shift+Z', 'Ctrl+Y'])
         redoAction.triggered.connect(lambda: self.currentEditor() and self.currentEditor().redo())
         menu.addAction(redoAction)
         self.actions['redo'] = redoAction
@@ -1163,6 +1210,11 @@ class Construct(QMainWindow):
         wordWrapAction.toggled.connect(lambda checked: (self.currentEditor() and self.currentEditor().setWrapMode(QsciScintilla.WrapWord if checked else QsciScintilla.WrapNone), self.settings.setValue("wordWrap", checked)))
         menu.addAction(wordWrapAction)
         self.actions['wordwrap'] = wordWrapAction
+        termAction = QAction('Terminal', self)
+        termAction.setShortcut('Ctrl+`')
+        termAction.triggered.connect(self.toggle_terminal)
+        menu.addAction(termAction)
+        self.actions['terminal'] = termAction
         selectLangAction = QAction('Select Language...', self)
         selectLangAction.setShortcut('Ctrl+L')
         selectLangAction.triggered.connect(self.openLanguageSelector)
@@ -1842,11 +1894,6 @@ class Construct(QMainWindow):
                 self._start_file_load(ed, file_name)
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to open file: {e}")
-
-    def _on_file_content_loaded(self, gen, path, content, encoding, newline):
-        if gen != self._open_generation:
-            return
-        self.loadFileContent(path, content, encoding, newline)
 
     def _on_file_load_started(self, ed, gen, path, encoding, newline):
         if gen != getattr(ed, 'open_generation', 0):

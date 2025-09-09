@@ -29,3 +29,5 @@ To personalize the application, create **ctstyle.css** in your user folder (*ex:
 
 - [Raven Development Team](https://ravendevteam.org/)
 - [Icons by Icons8](https://icons8.com/)
+- [Taha](https://github.com/tahakcbg)
+- [frijoles524](https://github.com/frijoles524)

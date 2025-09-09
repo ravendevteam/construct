@@ -1,5 +1,4 @@
 import logging
-import platform
 import sys
 import os
 import requests
@@ -292,31 +291,15 @@ class TerminalWidget(QWidget):
         self.setLayout(layout)
 
         self.auto_wrap_enabled = True
-        current_platform = platform.system()
-
-        if current_platform in ["Linux", "Darwin"]:
-            shell_bin = "/bin/bash"
-            from termqt import TerminalPOSIXExecIO
-            self.terminal_io = TerminalPOSIXExecIO(
-                self.terminal.row_len,
-                self.terminal.col_len,
-                shell_bin,
-                logger=self.logger
-            )
-        elif current_platform == "Windows":
-            shell_bin = "cmd"
-            from termqt import TerminalWinptyIO
-            self.terminal_io = TerminalWinptyIO(
-                self.terminal.row_len,
-                self.terminal.col_len,
-                shell_bin,
-                logger=self.logger
-            )
-            self.auto_wrap_enabled = False
-        else:
-            self.logger.error(f"Not supported platform: {current_platform}")
-            sys.exit(-1)
-
+        shell_bin = "cmd"
+        from termqt import TerminalWinptyIO
+        self.terminal_io = TerminalWinptyIO(
+            self.terminal.row_len,
+            self.terminal.col_len,
+            shell_bin,
+            logger=self.logger
+        )
+        self.auto_wrap_enabled = False
         self.terminal_io.stdout_callback = self.terminal.stdout
         self.terminal.stdin_callback = self.terminal_io.write
         self.terminal.resize_callback = self.terminal_io.resize
@@ -1119,10 +1102,7 @@ class Construct(QMainWindow):
         menu.addAction(undoAction)
         self.actions['undo'] = undoAction
         redoAction = QAction('Redo', self)
-        if sys.platform != 'darwin':
-            redoAction.setShortcuts(['Ctrl+Y', 'Ctrl+Shift+Z'])
-        else:
-            redoAction.setShortcuts(['Ctrl+Shift+Z', 'Ctrl+Y'])
+        redoAction.setShortcuts(['Ctrl+Shift+Z', 'Ctrl+Y'])
         redoAction.triggered.connect(lambda: self.currentEditor() and self.currentEditor().redo())
         menu.addAction(redoAction)
         self.actions['redo'] = redoAction
@@ -1914,11 +1894,6 @@ class Construct(QMainWindow):
                 self._start_file_load(ed, file_name)
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Failed to open file: {e}")
-
-    def _on_file_content_loaded(self, gen, path, content, encoding, newline):
-        if gen != self._open_generation:
-            return
-        self.loadFileContent(path, content, encoding, newline)
 
     def _on_file_load_started(self, ed, gen, path, encoding, newline):
         if gen != getattr(ed, 'open_generation', 0):

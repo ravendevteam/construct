@@ -118,6 +118,8 @@ class FileHandler(QThread):
                             break
                     detector.close()
                 encoding = detector.result['encoding'] or 'utf-8'
+                if encoding and encoding.lower() == 'ascii':
+                    encoding = 'UTF-8'
                 with open(self.file_path, 'rb') as fb:
                     sample = fb.read(64 * 1024)
                 newline = detect_newline(sample)
@@ -2045,7 +2047,7 @@ class Construct(QMainWindow):
         unsaved = getattr(ed, 'unsaved_changes', False)
         encoding = getattr(ed, 'encoding', 'UTF-8')
         asterisk = "" if after_save else ("*" if unsaved else "")
-        self.statusBar.showMessage(f"Line: {self.line} | Column: {self.column} | Characters: {self.char_count} | Encoding: {encoding} {asterisk}")
+        self.statusBar.showMessage(f"Line: {self.line} | Column: {self.column} | Characters: {self.char_count} | Encoding: {encoding.upper()} {asterisk}")
     def loadRecentFiles(self):
         self.settings = QSettings("Construct", "ConstructApp")
         self.recent_files = self.settings.value("recentFiles", [], type=list)

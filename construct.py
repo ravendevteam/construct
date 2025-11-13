@@ -1991,7 +1991,7 @@ class Construct(QMainWindow):
         ed = self.currentEditor()
         if ed and getattr(ed, 'file_path', None):
             try:
-                with open(getattr(ed, 'file_path'), 'w', encoding=encoding, newline=getattr(ed, 'newline', '\r\n')) as file:
+                with open(getattr(ed, 'file_path'), 'w', encoding=encoding, newline='') as file:
                     file.write(content)
                 setattr(ed, 'encoding', encoding)
                 setattr(ed, 'unsaved_changes', False)
